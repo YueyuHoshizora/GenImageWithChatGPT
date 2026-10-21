@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import shutil
@@ -128,6 +129,46 @@ def save_images(images: list[Path], out_dir: Path) -> list[Path]:
     return saved
 
 
+PREVIEW_COLS = 48  # 預覽寬度（字元欄數）
+
+
+def _preview_mode() -> str:
+    """回傳 iterm / kitty / chafa / off。GENIMAGE_PREVIEW 可手動覆寫。"""
+    forced = os.environ.get("GENIMAGE_PREVIEW", "").lower()
+    if forced:
+        return forced
+    if not sys.stdout.isatty() or os.environ.get("TMUX"):  # tmux 需 passthrough，不自動啟用
+        return "off"
+    term, prog = os.environ.get("TERM", ""), os.environ.get("TERM_PROGRAM", "")
+    if prog in {"iTerm.app", "WezTerm"} or os.environ.get("LC_TERMINAL") == "iTerm2":
+        return "iterm"
+    if prog == "ghostty" or os.environ.get("KITTY_WINDOW_ID") or "kitty" in term:
+        return "kitty"
+    return "chafa" if shutil.which("chafa") else "off"
+
+
+def preview(path: Path) -> None:
+    """在終端機內直接顯示圖片；不支援時靜默略過（檔案已存檔）。"""
+    mode = _preview_mode()
+    if mode == "iterm":
+        data = base64.b64encode(path.read_bytes()).decode("ascii")
+        name = base64.b64encode(path.name.encode()).decode("ascii")
+        sys.stdout.write(
+            f"\033]1337;File=name={name};inline=1;width={PREVIEW_COLS};preserveAspectRatio=1:{data}\a\n"
+        )
+    elif mode == "kitty":
+        data = base64.b64encode(path.read_bytes()).decode("ascii")
+        chunks = [data[i:i + 4096] for i in range(0, len(data), 4096)]
+        for i, chunk in enumerate(chunks):
+            more = 1 if i < len(chunks) - 1 else 0
+            ctrl = f"a=T,f=100,c={PREVIEW_COLS},m={more}" if i == 0 else f"m={more}"
+            sys.stdout.write(f"\033_G{ctrl};{chunk}\033\\")
+        sys.stdout.write("\n")
+    elif mode == "chafa":
+        subprocess.run(["chafa", f"--size={PREVIEW_COLS}", str(path)], check=False)
+    sys.stdout.flush()
+
+
 def draw(prompt: str, out_dir: Path) -> None:
     if not is_logged_in():
         print("尚未登入 ChatGPT，開始登入…")
@@ -135,6 +176,7 @@ def draw(prompt: str, out_dir: Path) -> None:
     print("繪圖中…（約數十秒）", flush=True)
     for p in save_images(generate(prompt), out_dir):
         print(f"已儲存：{p}")
+        preview(p)
 
 
 def main() -> int:

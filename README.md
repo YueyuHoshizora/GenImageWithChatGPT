@@ -34,6 +34,18 @@ python3 genimage.py --logout               # 執行 codex logout
 - 圖片存成 `output/<YYYYMMDD-HHMMSS>.png`（`-o` 可改），同一秒重複出圖會加 `-1`、`-2` 後綴，不會覆蓋。
 - 每張圖約需數十秒。
 
+## 終端機預覽
+
+出圖後會直接顯示在終端機（寬度 48 欄），依終端機自動選擇：
+
+| 終端機 | 協定 |
+| --- | --- |
+| iTerm2、WezTerm | iTerm2 inline image |
+| kitty、Ghostty | kitty graphics protocol |
+| 其他 | 有安裝 [`chafa`](https://hpjansson.org/chafa/) 就用它（`brew install chafa`） |
+
+不支援的終端機、非 tty 輸出（導向檔案／管線）與 tmux 內不會顯示，只印出檔案路徑。可用環境變數 `GENIMAGE_PREVIEW` 手動指定：`iterm`、`kitty`、`chafa` 或 `off`（例如在 tmux 內已設定 passthrough 時）。
+
 ## 運作方式
 
 執行 `codex exec --json --enable image_generation --sandbox read-only "$imagegen <提示詞>"`（在暫存資料夾、不寫入 session 檔），從 `thread.started` 事件取得 thread id，再把 `$CODEX_HOME/generated_images/<thread-id>/` 底下的圖片複製到輸出資料夾。`CODEX_HOME` 預設為 `~/.codex`。Codex 自己存的那份不會被刪除。
